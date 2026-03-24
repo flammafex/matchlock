@@ -66,8 +66,10 @@ export class PsiService {
     if (this.psi) return;
     if (this.initPromise) return this.initPromise;
     this.initPromise = (async () => {
-      const PSI = await import('@openmined/psi.js');
-      this.psi = await PSI.default() as unknown as PsiLibrary;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const PSI = await import('@openmined/psi.js') as any;
+      const loadPsi: () => Promise<PsiLibrary> = PSI.default ?? PSI;
+      this.psi = await loadPsi();
     })();
     return this.initPromise;
   }
