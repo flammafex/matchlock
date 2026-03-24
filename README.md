@@ -1,4 +1,4 @@
-# Matchlock
+# 🗝️ Matchlock
 
 Privacy-preserving mutual match: detect when two parties select each other without revealing unilateral selections to anyone.
 
