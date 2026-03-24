@@ -1,9 +1,10 @@
 import { sha256 } from '@noble/hashes/sha256';
-import { bytesToHex } from '@noble/hashes/utils';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import type { MatchToken, CommitHash } from '../types.js';
 
 export function commitToken(matchToken: MatchToken): CommitHash {
-  return bytesToHex(sha256(new TextEncoder().encode(matchToken)));
+  // Hash the 32 raw bytes, not the 64-char hex encoding
+  return bytesToHex(sha256(hexToBytes(matchToken)));
 }
 
 export function commitTokens(matchTokens: MatchToken[]): CommitHash[] {

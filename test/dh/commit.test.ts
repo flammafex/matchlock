@@ -40,4 +40,15 @@ describe('commit-reveal', () => {
     expect(commits).toHaveLength(2);
     commits.forEach(c => expect(c).toMatch(/^[0-9a-f]{64}$/));
   });
+
+  it('hashes raw bytes not hex string (known vector)', () => {
+    // 32 zero bytes hex-encoded
+    const zeroToken = '00'.repeat(32) as MatchToken;
+    const commit = commitToken(zeroToken);
+    // Must match SHA-256 of 32 zero bytes, not SHA-256 of the ASCII string '000...0'
+    expect(commit).toHaveLength(64);
+    // Sanity: commitment of all-zeros token should be a known value
+    // SHA-256(32 zero bytes) = 66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925
+    expect(commit).toBe('66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925');
+  });
 });
