@@ -68,18 +68,6 @@ See [`examples/mutual-match.ts`](examples/mutual-match.ts) for a complete end-to
 - **Replay protection**: Nullifiers prevent re-submission within a pool while remaining unlinkable across pools.
 - **Owner-held PSI keys**: The PSI server key is ECIES-encrypted to the pool owner's X25519 public key. The infrastructure operator cannot process PSI queries independently.
 
-## Reference implementation
-
-[Rendezvous](https://github.com/sophiaDOS/rendezvous) — a full matching application built on Matchlock, Freebird, and Witness.
-
-## Part of SophiaDOS
-
-Matchlock is one of three cryptographic primitives in the [SophiaDOS](https://github.com/sophiaDOS) ecosystem:
-
-- **Matchlock** — privacy-preserving mutual matching (this library)
-- **[Freebird](https://github.com/sophiaDOS/freebird)** — anonymous authorization via VOPRF blind signatures
-- **[Witness](https://github.com/sophiaDOS/witness)** — threshold timestamping via BLS12-381
-
 ## License
 
 Apache-2.0
