@@ -46,7 +46,6 @@ export interface PendingPsiRequest {
   psiRequest: string;
   status: 'pending' | 'processing' | 'completed' | 'expired';
   createdAt: number;
-  authTokenHash?: string;
 }
 
 /** PSI response record after owner processes a request */

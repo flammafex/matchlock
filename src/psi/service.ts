@@ -152,6 +152,8 @@ export class PsiService {
    * Compute intersection (client side).
    * Only the caller learns the result.
    * Note: PSI v2 getIntersection returns indices; we map back to strings.
+   * @param inputs - MUST be identical in content and order to the array passed to createRequest.
+   *   The PSI library replays the request internally to restore OPRF state.
    */
   async computeIntersection(
     clientKey: string,
@@ -182,6 +184,8 @@ export class PsiService {
 
   /**
    * Compute only cardinality (client side).
+   * @param inputs - MUST be identical in content and order to the array passed to createRequest.
+   *   The PSI library replays the request internally to restore OPRF state.
    */
   async computeCardinality(
     clientKey: string,
