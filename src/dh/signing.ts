@@ -9,6 +9,17 @@ export type SigningPublicKey = string & { readonly __brand: 'SigningPublicKey' }
 export type SigningPrivateKey = string & { readonly __brand: 'SigningPrivateKey' };
 export type Signature = string & { readonly __brand: 'Signature' };
 
+const HEX_64 = /^[0-9a-fA-F]{64}$/;
+const HEX_128 = /^[0-9a-fA-F]{128}$/;
+
+export function isValidSigningPublicKey(key: string): key is SigningPublicKey {
+  return HEX_64.test(key);
+}
+
+export function isValidSignature(sig: string): sig is Signature {
+  return HEX_128.test(sig);
+}
+
 export function generateSigningKeypair(): { signingPublicKey: SigningPublicKey; signingPrivateKey: SigningPrivateKey } {
   const privateKey = ed25519.utils.randomPrivateKey();
   return {

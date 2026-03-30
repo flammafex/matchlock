@@ -1,5 +1,6 @@
 import { generateKeypair, deriveMatchToken, deriveMatchTokens } from '../../src/dh/index.js';
 import type { PublicKey, PrivateKey } from '../../src/types.js';
+import { InvalidKeyError } from '../../src/errors.js';
 
 describe('DH token derivation', () => {
   it('mutual selection produces equal tokens', () => {
@@ -44,19 +45,19 @@ describe('DH token derivation', () => {
 
   // --- error paths ---
 
-  it('throws on malformed private key hex', () => {
+  it('throws InvalidKeyError on malformed private key hex', () => {
     const { publicKey } = generateKeypair();
-    expect(() => deriveMatchToken('not-valid-hex' as PrivateKey, publicKey, 'pool-1')).toThrow();
+    expect(() => deriveMatchToken('not-valid-hex' as PrivateKey, publicKey, 'pool-1')).toThrow(InvalidKeyError);
   });
 
-  it('throws on malformed public key hex', () => {
+  it('throws InvalidKeyError on malformed public key hex', () => {
     const { privateKey } = generateKeypair();
-    expect(() => deriveMatchToken(privateKey, 'zzzz' as PublicKey, 'pool-1')).toThrow();
+    expect(() => deriveMatchToken(privateKey, 'zzzz' as PublicKey, 'pool-1')).toThrow(InvalidKeyError);
   });
 
-  it('throws on odd-length hex private key', () => {
+  it('throws InvalidKeyError on odd-length hex private key', () => {
     const { publicKey } = generateKeypair();
-    expect(() => deriveMatchToken('abc' as PrivateKey, publicKey, 'pool-1')).toThrow();
+    expect(() => deriveMatchToken('abc' as PrivateKey, publicKey, 'pool-1')).toThrow(InvalidKeyError);
   });
 
   // --- known-answer test (cross-implementation vector) ---

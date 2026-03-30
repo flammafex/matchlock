@@ -1,8 +1,11 @@
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import type { MatchToken, CommitHash } from '../types.js';
+import { isValidMatchToken } from '../types.js';
+import { InvalidTokenError } from '../errors.js';
 
 export function commitToken(matchToken: MatchToken): CommitHash {
+  if (!isValidMatchToken(matchToken)) throw new InvalidTokenError('invalid match token');
   // Hash the 32 raw bytes, not the 64-char hex encoding
   return bytesToHex(sha256(hexToBytes(matchToken))) as CommitHash;
 }
