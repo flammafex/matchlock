@@ -74,3 +74,13 @@ export interface CreatePsiSetupRequest {
   fpr?: number;
   maxClientElements?: number;
 }
+
+/**
+ * Opaque client session returned by PsiService.createRequest.
+ * Pass the whole object to computeIntersection / computeCardinality —
+ * never reassemble it manually. This prevents the inputs-mismatch footgun.
+ */
+export interface PsiClientSession {
+  readonly clientKey: string;
+  readonly inputs: readonly string[];
+}

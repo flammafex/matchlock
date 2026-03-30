@@ -1,5 +1,11 @@
 import { generateKeypair } from '../../src/dh/index.js';
-import { encryptForPublicKey, decryptWithPrivateKey, serializeEncryptedBox, deserializeEncryptedBox } from '../../src/dh/ecies.js';
+import {
+  encryptForPublicKey,
+  decryptWithPrivateKey,
+  serializeEncryptedBox,
+  deserializeEncryptedBox,
+} from '../../src/dh/ecies.js';
+import type { PublicKey } from '../../src/types.js';
 
 describe('ECIES', () => {
   it('encrypts and decrypts round-trip', () => {
@@ -31,5 +37,42 @@ describe('ECIES', () => {
     const { publicKey, privateKey } = generateKeypair();
     const box = encryptForPublicKey('serialize me', publicKey);
     expect(decryptWithPrivateKey(deserializeEncryptedBox(serializeEncryptedBox(box)), privateKey)).toBe('serialize me');
+  });
+
+  // --- error paths ---
+
+  it('deserializeEncryptedBox throws on invalid base64', () => {
+    expect(() => deserializeEncryptedBox('not!valid!base64!!!')).toThrow('deserializeEncryptedBox');
+  });
+
+  it('deserializeEncryptedBox throws on valid base64 but missing fields', () => {
+    const bad = btoa(JSON.stringify({ ephemeralPublicKey: 'abc' })); // missing nonce, ciphertext
+    expect(() => deserializeEncryptedBox(bad)).toThrow('deserializeEncryptedBox');
+  });
+
+  it('deserializeEncryptedBox throws on non-object JSON', () => {
+    expect(() => deserializeEncryptedBox(btoa('"just a string"'))).toThrow('deserializeEncryptedBox');
+  });
+
+  it('decryptWithPrivateKey throws on malformed ephemeralPublicKey hex', () => {
+    const { privateKey } = generateKeypair();
+    const { publicKey } = generateKeypair();
+    const box = encryptForPublicKey('test', publicKey);
+    expect(() => decryptWithPrivateKey({ ...box, ephemeralPublicKey: 'zzzz' }, privateKey)).toThrow();
+  });
+
+  it('encryptForPublicKey throws on malformed public key', () => {
+    expect(() => encryptForPublicKey('test', 'not-valid-hex' as PublicKey)).toThrow();
+  });
+
+  it('handles empty plaintext', () => {
+    const { publicKey, privateKey } = generateKeypair();
+    expect(decryptWithPrivateKey(encryptForPublicKey('', publicKey), privateKey)).toBe('');
+  });
+
+  it('handles unicode plaintext', () => {
+    const { publicKey, privateKey } = generateKeypair();
+    const msg = '🔑 matchlock protocol ∞';
+    expect(decryptWithPrivateKey(encryptForPublicKey(msg, publicKey), privateKey)).toBe(msg);
   });
 });

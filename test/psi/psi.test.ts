@@ -1,4 +1,4 @@
-import { generateKeypair } from '../../src/dh/index.js';
+import { generateKeypair, deriveMatchToken } from '../../src/dh/index.js';
 import { decryptWithPrivateKey, deserializeEncryptedBox } from '../../src/dh/ecies.js';
 import { PsiService } from '../../src/psi/service.js';
 
@@ -10,45 +10,86 @@ describe('PsiService — owner-held key flow', () => {
     await psi.init();
   }, 60000);
 
-  it('full owner-held key round-trip: setup → request → process → intersect', async () => {
-    const ownerKeypair = generateKeypair();
-    const ownerTokens = ['token-alice-bob', 'token-alice-carol', 'token-alice-dave'];
+  it('full owner-held key round-trip using derived match tokens', async () => {
+    // Simulate: alice owns a pool, bob/carol/dave are candidates
+    const alice = generateKeypair();
+    const bob = generateKeypair();
+    const carol = generateKeypair();
+    const dave = generateKeypair();
+    const poolId = 'test-pool';
+
+    const ownerTokens = [
+      deriveMatchToken(alice.privateKey, bob.publicKey, poolId),
+      deriveMatchToken(alice.privateKey, carol.publicKey, poolId),
+      deriveMatchToken(alice.privateKey, dave.publicKey, poolId),
+    ];
 
     const setup = await psi.createOwnerEncryptedSetup(
-      { poolId: 'test-pool', matchTokens: ownerTokens },
-      ownerKeypair.publicKey,
+      { poolId, matchTokens: ownerTokens },
+      alice.publicKey,
     );
 
     expect(setup.encryptedServerKey).toBeTruthy();
     expect(setup.setupMessage).toBeTruthy();
-    expect(setup.ownerPublicKey).toBe(ownerKeypair.publicKey);
+    expect(setup.ownerPublicKey).toBe(alice.publicKey);
 
-    const joinerTokens = ['token-alice-bob', 'token-joiner-eve']; // one overlap
-    const { request: psiRequest, clientKey } = await psi.createRequest(joinerTokens);
+    // Joiner (bob) derives his token for alice — must equal ownerTokens[0] by commutativity
+    const bobTokenForAlice = deriveMatchToken(bob.privateKey, alice.publicKey, poolId);
+    const eve = generateKeypair(); // no mutual match with alice
+    const joinerTokens = [
+      bobTokenForAlice,
+      deriveMatchToken(eve.privateKey, alice.publicKey, poolId),
+    ];
+
+    const { request: psiRequest, session } = await psi.createRequest(joinerTokens);
 
     const box = deserializeEncryptedBox(setup.encryptedServerKey);
-    const decryptedServerKey = decryptWithPrivateKey(box, ownerKeypair.privateKey);
+    const decryptedServerKey = decryptWithPrivateKey(box, alice.privateKey);
     const psiResponse = await psi.processRequestWithDecryptedKey(decryptedServerKey, psiRequest);
 
-    const result = await psi.computeIntersection(clientKey, joinerTokens, setup.setupMessage, psiResponse);
+    const result = await psi.computeIntersection(session, setup.setupMessage, psiResponse);
 
-    expect(result.intersection).toContain('token-alice-bob');
+    expect(result.intersection).toContain(bobTokenForAlice);
     expect(result.cardinality).toBe(1);
   }, 60000);
 
-  it('cardinality-only mode', async () => {
-    const ownerKeypair = generateKeypair();
+  it('cardinality-only mode with derived tokens', async () => {
+    const alice = generateKeypair();
+    const bob = generateKeypair();
+    const carol = generateKeypair();
+    const dave = generateKeypair();
+    const poolId = 'test-pool-2';
+
+    const ownerTokens = [
+      deriveMatchToken(alice.privateKey, bob.publicKey, poolId),
+      deriveMatchToken(alice.privateKey, carol.publicKey, poolId),
+      deriveMatchToken(alice.privateKey, dave.publicKey, poolId),
+    ];
+
     const setup = await psi.createOwnerEncryptedSetup(
-      { poolId: 'test-pool-2', matchTokens: ['a', 'b', 'c'] },
-      ownerKeypair.publicKey,
+      { poolId, matchTokens: ownerTokens },
+      alice.publicKey,
     );
 
-    const { request, clientKey } = await psi.createRequest(['a', 'b', 'x']);
+    // Bob and carol both match alice; eve does not
+    const eve = generateKeypair();
+    const joinerTokens = [
+      deriveMatchToken(bob.privateKey, alice.publicKey, poolId),
+      deriveMatchToken(carol.privateKey, alice.publicKey, poolId),
+      deriveMatchToken(eve.privateKey, alice.publicKey, poolId),
+    ];
+
+    const { request, session } = await psi.createRequest(joinerTokens);
     const box = deserializeEncryptedBox(setup.encryptedServerKey);
-    const serverKey = decryptWithPrivateKey(box, ownerKeypair.privateKey);
+    const serverKey = decryptWithPrivateKey(box, alice.privateKey);
     const response = await psi.processRequestWithDecryptedKey(serverKey, request);
 
-    const count = await psi.computeCardinality(clientKey, ['a', 'b', 'x'], setup.setupMessage, response);
+    const count = await psi.computeCardinality(session, setup.setupMessage, response);
     expect(count).toBe(2);
   }, 60000);
+
+  it('session inputs are frozen (immutable)', async () => {
+    const { session } = await psi.createRequest(['a', 'b']);
+    expect(Object.isFrozen(session.inputs)).toBe(true);
+  });
 });

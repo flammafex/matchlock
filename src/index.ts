@@ -19,10 +19,11 @@ export {
 export type { SigningPublicKey, SigningPrivateKey, Signature } from './dh/signing.js';
 
 // Primitive types
-export type { MatchToken, CommitHash, PublicKey, PrivateKey } from './types.js';
+export type { MatchToken, CommitHash, PublicKey, PrivateKey, Nullifier } from './types.js';
+export { isValidPublicKey, isValidPrivateKey } from './types.js';
 
 // PSI
-export { PsiService, getPsiService } from './psi/index.js';
+export { PsiService } from './psi/index.js';
 export type {
   PsiClientRequest,
   PsiJoinResponse,
@@ -32,4 +33,5 @@ export type {
   PsiResponseRecord,
   OwnerPsiProcessingResult,
   CreatePsiSetupRequest,
+  PsiClientSession,
 } from './psi/index.js';

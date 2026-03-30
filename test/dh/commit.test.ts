@@ -1,5 +1,6 @@
 import { generateKeypair, deriveMatchToken } from '../../src/dh/index.js';
 import { commitToken, commitTokens, verifyCommitment } from '../../src/dh/commit.js';
+import type { MatchToken } from '../../src/types.js';
 
 describe('commit-reveal', () => {
   it('commitment is deterministic', () => {
@@ -43,12 +44,35 @@ describe('commit-reveal', () => {
 
   it('hashes raw bytes not hex string (known vector)', () => {
     // 32 zero bytes hex-encoded
-    const zeroToken = '00'.repeat(32) as MatchToken;
+    const zeroToken = '00'.repeat(32) as unknown as MatchToken;
     const commit = commitToken(zeroToken);
     // Must match SHA-256 of 32 zero bytes, not SHA-256 of the ASCII string '000...0'
     expect(commit).toHaveLength(64);
     // Sanity: commitment of all-zeros token should be a known value
     // SHA-256(32 zero bytes) = 66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925
     expect(commit).toBe('66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925');
+  });
+
+  // --- error paths ---
+
+  it('throws on malformed token hex', () => {
+    expect(() => commitToken('not-valid-hex' as unknown as MatchToken)).toThrow();
+  });
+
+  it('verifyCommitment rejects manipulated commitment (bit flip)', () => {
+    const alice = generateKeypair();
+    const bob = generateKeypair();
+    const token = deriveMatchToken(alice.privateKey, bob.publicKey, 'pool-1');
+    const commit = commitToken(token);
+    const flipped = (commit[0] === 'a' ? 'b' : 'a') + commit.slice(1);
+    expect(verifyCommitment(token, flipped as typeof commit)).toBe(false);
+  });
+
+  it('mutual-token commitments match for both parties', () => {
+    const alice = generateKeypair();
+    const bob = generateKeypair();
+    const aliceToken = deriveMatchToken(alice.privateKey, bob.publicKey, 'pool-1');
+    const bobToken = deriveMatchToken(bob.privateKey, alice.publicKey, 'pool-1');
+    expect(commitToken(aliceToken)).toBe(commitToken(bobToken));
   });
 });

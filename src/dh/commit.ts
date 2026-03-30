@@ -4,7 +4,7 @@ import type { MatchToken, CommitHash } from '../types.js';
 
 export function commitToken(matchToken: MatchToken): CommitHash {
   // Hash the 32 raw bytes, not the 64-char hex encoding
-  return bytesToHex(sha256(hexToBytes(matchToken)));
+  return bytesToHex(sha256(hexToBytes(matchToken))) as CommitHash;
 }
 
 export function commitTokens(matchTokens: MatchToken[]): CommitHash[] {

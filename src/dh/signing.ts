@@ -1,28 +1,30 @@
 import { ed25519 } from '@noble/curves/ed25519';
 import { sha256 } from '@noble/hashes/sha256';
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
+import { bytesToHex, hexToBytes, concatBytes } from '@noble/hashes/utils';
 
-const SIGNING_DOMAIN = 'rendezvous-sign-v1';
+const SIGNING_DOMAIN = 'matchlock-sign-v1';
+const encoder = new TextEncoder();
 
-export type SigningPublicKey = string;
-export type SigningPrivateKey = string;
-export type Signature = string;
+export type SigningPublicKey = string & { readonly __brand: 'SigningPublicKey' };
+export type SigningPrivateKey = string & { readonly __brand: 'SigningPrivateKey' };
+export type Signature = string & { readonly __brand: 'Signature' };
 
 export function generateSigningKeypair(): { signingPublicKey: SigningPublicKey; signingPrivateKey: SigningPrivateKey } {
   const privateKey = ed25519.utils.randomPrivateKey();
-  return { signingPublicKey: bytesToHex(ed25519.getPublicKey(privateKey)), signingPrivateKey: bytesToHex(privateKey) };
+  return {
+    signingPublicKey: bytesToHex(ed25519.getPublicKey(privateKey)) as SigningPublicKey,
+    signingPrivateKey: bytesToHex(privateKey) as SigningPrivateKey,
+  };
 }
 
 export function sign(message: string, signingPrivateKey: SigningPrivateKey): Signature {
-  const encoder = new TextEncoder();
-  const messageHash = sha256(new Uint8Array([...encoder.encode(SIGNING_DOMAIN), ...encoder.encode(message)]));
-  return bytesToHex(ed25519.sign(messageHash, hexToBytes(signingPrivateKey)));
+  const messageHash = sha256(concatBytes(encoder.encode(SIGNING_DOMAIN), encoder.encode(message)));
+  return bytesToHex(ed25519.sign(messageHash, hexToBytes(signingPrivateKey))) as Signature;
 }
 
 export function verify(message: string, signature: Signature, signingPublicKey: SigningPublicKey): boolean {
   try {
-    const encoder = new TextEncoder();
-    const messageHash = sha256(new Uint8Array([...encoder.encode(SIGNING_DOMAIN), ...encoder.encode(message)]));
+    const messageHash = sha256(concatBytes(encoder.encode(SIGNING_DOMAIN), encoder.encode(message)));
     return ed25519.verify(hexToBytes(signature), messageHash, hexToBytes(signingPublicKey));
   } catch { return false; }
 }

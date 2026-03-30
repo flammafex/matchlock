@@ -2,13 +2,28 @@ import type {
   CreatePsiSetupRequest,
   OwnerHeldPsiSetup,
   PsiResult,
+  PsiClientSession,
 } from './types.js';
 import {
   encryptForPublicKey,
   serializeEncryptedBox,
 } from '../dh/ecies.js';
+import type { PublicKey } from '../types.js';
 
-// PSI v2 types
+function bytesToBase64(bytes: Uint8Array): string {
+  let str = '';
+  for (const b of bytes) str += String.fromCharCode(b);
+  return btoa(str);
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+}
+
+// Hand-rolled mirror of @openmined/psi.js internals.
+// The library does not export TypeScript types; if it did this block could be replaced
+// with: import type { ... } from '@openmined/psi.js';
+// See: https://github.com/OpenMined/PSI/issues (upstream tracking issue)
 interface PsiLibrary {
   server?: {
     createWithNewKey(revealIntersection?: boolean): PsiServer;
@@ -41,7 +56,7 @@ interface PsiServer {
 
 interface PsiClient {
   createRequest(inputs: readonly string[]): PsiRequest;
-  getIntersection(setup: PsiServerSetup, response: PsiResponse): number[]; // returns INDICES
+  getIntersection(setup: PsiServerSetup, response: PsiResponse): number[];
   getIntersectionSize(setup: PsiServerSetup, response: PsiResponse): number;
   getPrivateKeyBytes(): Uint8Array;
 }
@@ -97,12 +112,11 @@ export class PsiService {
     const server = psi.server.createWithNewKey(true);
     const setup = server.createSetupMessage(fpr, maxClientElements, request.matchTokens);
     const privateKey = server.getPrivateKeyBytes();
-    const privateKeyBase64 = Buffer.from(privateKey).toString('base64');
-    const encryptedBox = encryptForPublicKey(privateKeyBase64, ownerPublicKey);
+    const encryptedBox = encryptForPublicKey(bytesToBase64(privateKey), ownerPublicKey as PublicKey);
 
     return {
       poolId: request.poolId,
-      setupMessage: Buffer.from(setup.serializeBinary()).toString('base64'),
+      setupMessage: bytesToBase64(setup.serializeBinary()),
       encryptedServerKey: serializeEncryptedBox(encryptedBox),
       ownerPublicKey,
       fpr,
@@ -123,21 +137,20 @@ export class PsiService {
     const psi = await this.getPsi();
     if (!psi.server) throw new Error('PSI server not available');
 
-    const serverKey = new Uint8Array(Buffer.from(serverKeyBase64, 'base64'));
-    const server = psi.server.createFromKey(serverKey, true);
-
-    const requestBytes = new Uint8Array(Buffer.from(psiRequestBase64, 'base64'));
-    const request = psi.request.deserializeBinary(requestBytes);
+    const server = psi.server.createFromKey(base64ToBytes(serverKeyBase64), true);
+    const request = psi.request.deserializeBinary(base64ToBytes(psiRequestBase64));
     const response = server.processRequest(request);
 
-    return Buffer.from(response.serializeBinary()).toString('base64');
+    return bytesToBase64(response.serializeBinary());
   }
 
   /**
    * Create a PSI request (client side).
-   * Returns the request to send and the client key needed to compute intersection later.
+   * Returns the serialized request to send and an opaque session object.
+   * Pass the session unchanged to computeIntersection / computeCardinality —
+   * never separate clientKey from inputs.
    */
-  async createRequest(inputs: string[]): Promise<{ request: string; clientKey: string }> {
+  async createRequest(inputs: string[]): Promise<{ request: string; session: PsiClientSession }> {
     const psi = await this.getPsi();
     if (!psi.client) throw new Error('PSI client not available');
 
@@ -145,76 +158,61 @@ export class PsiService {
     const request = client.createRequest(inputs);
 
     return {
-      request: Buffer.from(request.serializeBinary()).toString('base64'),
-      clientKey: Buffer.from(client.getPrivateKeyBytes()).toString('base64'),
+      request: bytesToBase64(request.serializeBinary()),
+      session: {
+        clientKey: bytesToBase64(client.getPrivateKeyBytes()),
+        inputs: Object.freeze([...inputs]),
+      },
     };
   }
 
   /**
    * Compute intersection (client side).
+   * Pass the session returned by createRequest unchanged.
    * Only the caller learns the result.
-   * Note: PSI v2 getIntersection returns indices; we map back to strings.
-   * @param inputs - MUST be identical in content and order to the array passed to createRequest.
-   *   The PSI library replays the request internally to restore OPRF state.
    */
   async computeIntersection(
-    clientKey: string,
-    inputs: string[],
+    session: PsiClientSession,
     psiSetupBase64: string,
     psiResponseBase64: string,
   ): Promise<PsiResult> {
     const psi = await this.getPsi();
     if (!psi.client) throw new Error('PSI client not available');
 
-    const keyBytes = new Uint8Array(Buffer.from(clientKey, 'base64'));
-    const client = psi.client.createFromKey(keyBytes, true);
+    const client = psi.client.createFromKey(base64ToBytes(session.clientKey), true);
 
-    // Must call createRequest again to restore internal state before getIntersection
-    client.createRequest(inputs);
+    // PSI library requires replaying createRequest to restore OPRF state
+    client.createRequest(session.inputs);
 
-    const setupBytes = new Uint8Array(Buffer.from(psiSetupBase64, 'base64'));
-    const responseBytes = new Uint8Array(Buffer.from(psiResponseBase64, 'base64'));
-    const setup = psi.serverSetup.deserializeBinary(setupBytes);
-    const response = psi.response.deserializeBinary(responseBytes);
+    const setup = psi.serverSetup.deserializeBinary(base64ToBytes(psiSetupBase64));
+    const response = psi.response.deserializeBinary(base64ToBytes(psiResponseBase64));
 
-    // v2: getIntersection returns number[] (indices into inputs array)
     const indices = client.getIntersection(setup, response);
-    const intersection = indices.map(i => inputs[i]);
+    const intersection = indices.map(i => session.inputs[i]);
 
     return { intersection, cardinality: intersection.length };
   }
 
   /**
    * Compute only cardinality (client side).
-   * @param inputs - MUST be identical in content and order to the array passed to createRequest.
-   *   The PSI library replays the request internally to restore OPRF state.
+   * Pass the session returned by createRequest unchanged.
    */
   async computeCardinality(
-    clientKey: string,
-    inputs: string[],
+    session: PsiClientSession,
     psiSetupBase64: string,
     psiResponseBase64: string,
   ): Promise<number> {
     const psi = await this.getPsi();
     if (!psi.client) throw new Error('PSI client not available');
 
-    const keyBytes = new Uint8Array(Buffer.from(clientKey, 'base64'));
-    const client = psi.client.createFromKey(keyBytes, false);
+    const client = psi.client.createFromKey(base64ToBytes(session.clientKey), false);
 
-    client.createRequest(inputs);
+    // PSI library requires replaying createRequest to restore OPRF state
+    client.createRequest(session.inputs);
 
-    const setupBytes = new Uint8Array(Buffer.from(psiSetupBase64, 'base64'));
-    const responseBytes = new Uint8Array(Buffer.from(psiResponseBase64, 'base64'));
-    const setup = psi.serverSetup.deserializeBinary(setupBytes);
-    const response = psi.response.deserializeBinary(responseBytes);
+    const setup = psi.serverSetup.deserializeBinary(base64ToBytes(psiSetupBase64));
+    const response = psi.response.deserializeBinary(base64ToBytes(psiResponseBase64));
 
     return client.getIntersectionSize(setup, response);
   }
-}
-
-let psiService: PsiService | null = null;
-
-export function getPsiService(): PsiService {
-  if (!psiService) psiService = new PsiService();
-  return psiService;
 }

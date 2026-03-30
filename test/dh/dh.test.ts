@@ -1,4 +1,5 @@
 import { generateKeypair, deriveMatchToken, deriveMatchTokens } from '../../src/dh/index.js';
+import type { PublicKey, PrivateKey } from '../../src/types.js';
 
 describe('DH token derivation', () => {
   it('mutual selection produces equal tokens', () => {
@@ -39,5 +40,46 @@ describe('DH token derivation', () => {
     const alice = generateKeypair();
     const bob = generateKeypair();
     expect(deriveMatchToken(alice.privateKey, bob.publicKey, 'pool-1')).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  // --- error paths ---
+
+  it('throws on malformed private key hex', () => {
+    const { publicKey } = generateKeypair();
+    expect(() => deriveMatchToken('not-valid-hex' as PrivateKey, publicKey, 'pool-1')).toThrow();
+  });
+
+  it('throws on malformed public key hex', () => {
+    const { privateKey } = generateKeypair();
+    expect(() => deriveMatchToken(privateKey, 'zzzz' as PublicKey, 'pool-1')).toThrow();
+  });
+
+  it('throws on odd-length hex private key', () => {
+    const { publicKey } = generateKeypair();
+    expect(() => deriveMatchToken('abc' as PrivateKey, publicKey, 'pool-1')).toThrow();
+  });
+
+  // --- known-answer test (cross-implementation vector) ---
+
+  it('produces correct token for RFC 7748 X25519 test vectors (KAT)', () => {
+    // Private keys from RFC 7748 §6.1; public keys derived deterministically.
+    // Expected token computed by this implementation — pin it to catch domain/hash regressions.
+    const alicePriv = '77076d0a7318a57d3c16c17251b26645c6c2f6929f0a4b5745a0435c9b7bd30d' as PrivateKey;
+    const bobPub    = 'de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f' as PublicKey;
+    const token = deriveMatchToken(alicePriv, bobPub, 'test-pool');
+    // SHA-256( X25519(alice_priv, bob_pub) || "test-pool" || "matchlock-match-v1" )
+    expect(token).toBe('bbfee0cd9a72d348a1a4dafee9ad8c055f02c79e0d341ff4aa425583030492bf');
+  });
+
+  // --- commutativity property with multiple key pairs ---
+
+  it('commutativity holds for multiple fresh key pairs', () => {
+    for (let i = 0; i < 5; i++) {
+      const a = generateKeypair();
+      const b = generateKeypair();
+      expect(deriveMatchToken(a.privateKey, b.publicKey, 'pool-x')).toBe(
+        deriveMatchToken(b.privateKey, a.publicKey, 'pool-x'),
+      );
+    }
   });
 });

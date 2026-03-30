@@ -1,4 +1,4 @@
-export { PsiService, getPsiService } from './service.js';
+export { PsiService } from './service.js';
 export type {
   PsiClientRequest,
   PsiJoinResponse,
@@ -8,4 +8,5 @@ export type {
   PsiResponseRecord,
   OwnerPsiProcessingResult,
   CreatePsiSetupRequest,
+  PsiClientSession,
 } from './types.js';
