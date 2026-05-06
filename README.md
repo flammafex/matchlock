@@ -4,7 +4,7 @@ Privacy-preserving mutual match: detect when two parties select each other witho
 
 ## The problem
 
-Every existing matching platform operates as a trusted intermediary that sees all preferences. They know who you selected and who selected you, including rejections. This is a structural surveillance problem, not an implementation detail.
+Every existing matching platform operates as a trusted intermediary that sees all preferences. They know who you selected and who selected you, including rejections.
 
 ## How Matchlock works
 
